@@ -188,6 +188,7 @@ export function Inventory({ partNumber = "", ...rest }) {
   const [confirmDiscardAction, setConfirmDiscardAction] = useState(null);
   const [confirmReImport, setConfirmReImport] = useState(false);
   const [confirmReImportAction, setConfirmReImportAction] = useState(null);
+  const [isBarcodeScanningEnabled, setIsBarcodeScanningEnabled] = useState(false);
 
   let blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
@@ -228,7 +229,7 @@ export function Inventory({ partNumber = "", ...rest }) {
       setPartMetadataErrors([]);
       await fetchPartTypes();
       await fetchRecentRows();
-      
+
       if (partNumberStr) {
         // editing an existing part
         partToSearch = await fetchPart(partNumberStr, partId) || part;
@@ -310,9 +311,9 @@ export function Inventory({ partNumber = "", ...rest }) {
 
   /**
    * Map the supplier part numbers from the information in metadata info of all parts from all apis
-   * @param {object} entity 
-   * @param {array} metadataParts 
-   * @returns 
+   * @param {object} entity
+   * @param {array} metadataParts
+   * @returns
    */
   const mapSupplierPartNumbers = (entity, metadataParts, allowOverwrite) => {
     // map digikey
@@ -325,7 +326,7 @@ export function Inventory({ partNumber = "", ...rest }) {
       if (entity.datasheetUrl?.length === 0) entity.datasheetUrl = _.first(searchResult.datasheetUrls) || "";
       if (entity.imageUrl?.length === 0) entity.imageUrl = searchResult.imageUrl;
     }
-    
+
     // map mouser
     searchResult = _.find(metadataParts, (e) => {
       return e !== undefined && e.supplier === "Mouser" && e.manufacturerPartNumber === entity.manufacturerPartNumber;
@@ -422,10 +423,10 @@ export function Inventory({ partNumber = "", ...rest }) {
       entity.otherNames = mappedPart.additionalPartNumbers.join(" ");
     }
     mapSupplierPartNumbers(entity, metadataParts, allowOverwrite);
-    
+
     switch(mappedPart.supplier) {
       case "DigiKey":
-        entity.digiKeyPartNumber = mapIfValid("digiKeyPartNumber", entity, mappedPart, allowOverwrite, "supplierPartNumber");  
+        entity.digiKeyPartNumber = mapIfValid("digiKeyPartNumber", entity, mappedPart, allowOverwrite, "supplierPartNumber");
         break;
       case "Mouser":
         entity.mouserPartNumber = mapIfValid("mouserPartNumber", entity, mappedPart, allowOverwrite, "supplierPartNumber");
@@ -472,7 +473,7 @@ export function Inventory({ partNumber = "", ...rest }) {
 
       const suggestedPart = infoResponse.parts[0];
       // populate the form with data from the part metadata
-      if (allowSetFromMetadata) { 
+      if (allowSetFromMetadata) {
         updatedPart = setPartFromMetadata(metadataParts, { ...suggestedPart, quantity: -1 }, allowOverwrite);
       }
     } else {
@@ -743,7 +744,7 @@ export function Inventory({ partNumber = "", ...rest }) {
 
     // barcode scan successful
     if (enableSound && !isBulkScanOpen) soundSuccess.play();
-    
+
     // add part
     console.debug('clean part number found through barcode', cleanPartNumber, input.value?.quantity);
     if (isBulkScanOpen) {
@@ -786,7 +787,7 @@ export function Inventory({ partNumber = "", ...rest }) {
           }
 
           setInputPartNumber(existingPart.partNumber);
-          
+
           const originalQuantity = existingPart.quantity;
           // add quantity to part
           if (allowQuantityUpdate) {
@@ -833,7 +834,7 @@ export function Inventory({ partNumber = "", ...rest }) {
           setIsDirty(false);
           return;
         }
-        
+
         console.debug('trying barcode lookup');
         // fetch metadata on the barcode if available
         await doBarcodeLookup(scannedPart, async (partInfo) => {
@@ -1022,7 +1023,7 @@ export function Inventory({ partNumber = "", ...rest }) {
     e.stopPropagation();
     const isExisting = part.partId > 0;
 
-    const request = { 
+    const request = {
       ...part,
       partNumber: inputPartNumber.trim(),
       partTypeId: (parseInt(part.partTypeId) || 0) + "",
@@ -1224,7 +1225,7 @@ export function Inventory({ partNumber = "", ...rest }) {
     setPartMetadataErrors([]);
 
     part[control.name] = control.value;
-    
+
     switch (control.name) {
       case "partNumber":
         if (part.partNumber && part.partNumber.length > 0) {
@@ -1413,7 +1414,7 @@ export function Inventory({ partNumber = "", ...rest }) {
           Existing values for fields provided by external APIs will be overwritten.
         </Trans>
       </p>
-      </>      
+      </>
     );
     setConfirmRefreshPartIsOpen(true);
   };
@@ -1455,6 +1456,14 @@ export function Inventory({ partNumber = "", ...rest }) {
     e.stopPropagation();
     removeViewPreference('digikey');
     clearForm(e, true);
+  };
+
+  const handlePartNumberFocus = (e) => {
+    setIsBarcodeScanningEnabled(true);
+  };
+
+  const handlePartNumberBlur = (e) => {
+    setIsBarcodeScanningEnabled(false);
   };
 
   /* RENDER */
@@ -1509,7 +1518,6 @@ export function Inventory({ partNumber = "", ...rest }) {
                           required
                           placeholder="LM358"
                           focus
-                          /* this should be the only field that is not updated on an info update */
                           value={inputPartNumber || ""}
                           name="inputPartNumber"
                           icon="search"
@@ -1519,9 +1527,23 @@ export function Inventory({ partNumber = "", ...rest }) {
                           onChange={handleInputPartNumberChange}
                           onIconClick={handleInputPartNumberChange}
                           onClear={handleInputPartNumberClear}
-                          onBarcodeReadStarted={(e) => { window.requestAnimationFrame(() => { disableRendering.current = true; }); searchDebounced.cancel(); }}
-                          onBarcodeReadCancelled={(e) => { window.requestAnimationFrame(() => { disableRendering.current = false; }); searchDebounced.cancel(); }}
-                          onBarcodeReadReceived={(e) => { window.requestAnimationFrame(() => { disableRendering.current = false; }); searchDebounced.cancel(); }}
+                          onBarcodeReadStarted={(e) => {
+                            window.requestAnimationFrame(() => { disableRendering.current = true; });
+                            searchDebounced.cancel();
+                            setIsBarcodeScanningEnabled(true);
+                          }}
+                          onBarcodeReadCancelled={(e) => {
+                            window.requestAnimationFrame(() => { disableRendering.current = false; });
+                            searchDebounced.cancel();
+                            setIsBarcodeScanningEnabled(false);
+                          }}
+                          onBarcodeReadReceived={(e) => {
+                            window.requestAnimationFrame(() => { disableRendering.current = false; });
+                            searchDebounced.cancel();
+                            setIsBarcodeScanningEnabled(false);
+                          }}
+                          onFocus={handlePartNumberFocus}
+                          onBlur={handlePartNumberBlur}
                         />
                         {!isEditing && !partExistsInInventory && part.partNumber && part.partNumber !== inputPartNumber &&
                           <div className="suggested-part">
@@ -1729,7 +1751,7 @@ export function Inventory({ partNumber = "", ...rest }) {
                               {t('page.inventory.refresh', "Refresh")}
                             </Button>
                           }
-                        />                        
+                        />
                         {metadataParts && metadataParts.length > 1 && (
                           <ChooseAlternatePartModal
                             trigger={
@@ -1907,7 +1929,7 @@ export function Inventory({ partNumber = "", ...rest }) {
                       <Popup
                         content={<p>The product's status, usually <i>Active</i> or <i>Obsolete</i>.</p>}
                         trigger={<div><ClearableInput placeholder='Active' value={part.productStatus || ''} onChange={handleChange} name='productStatus' /></div>}
-                      />                      
+                      />
                     </Form.Field>
                   </Form.Group>
                   <Form.Group>
@@ -1960,12 +1982,12 @@ export function Inventory({ partNumber = "", ...rest }) {
                     </Form.Field>
                   </Form.Group>
                   {_.filter(systemSettings.customFields, x => x.customFieldTypeId === CustomFieldTypes.Inventory.value)?.length > 0 && <hr />}
-                  <CustomFieldValues 
+                  <CustomFieldValues
                     type={CustomFieldTypes.Inventory}
                     header={t('label.customFields', "Custom Fields")}
                     headerElement="h3"
-                    customFieldDefinitions={systemSettings.customFields} 
-                    customFieldValues={part.customFields} 
+                    customFieldDefinitions={systemSettings.customFields}
+                    customFieldValues={part.customFields}
                     onChange={handleCustomFieldChange}
                   />
                 </Segment>}
@@ -1980,11 +2002,11 @@ export function Inventory({ partNumber = "", ...rest }) {
                   <Form.Group>
                     <Form.Field width={6}>
                       <label>{t('label.symbolName', "KiCad Symbol Name")}</label>
-                      <ClearableInput 
-                        placeholder='MCU_Microchip_ATtiny:ATtiny85-20P' 
-                        value={part.symbolName || ''} 
-                        onChange={handleChange} 
-                        name='symbolName' 
+                      <ClearableInput
+                        placeholder='MCU_Microchip_ATtiny:ATtiny85-20P'
+                        value={part.symbolName || ''}
+                        onChange={handleChange}
+                        name='symbolName'
                         help={<Trans i18nKey="page.inventory.popup.symbolName">
                           Specify the symbol name used in KiCad for this part. Both the symbol group and symbol name should be specified and separated using a colon.<br /><i>Example:</i> <b>MCU_Microchip_ATtiny:ATtiny85-20P</b>
                         </Trans>}
@@ -1993,11 +2015,11 @@ export function Inventory({ partNumber = "", ...rest }) {
                     </Form.Field>
                     <Form.Field width={6}>
                       <label>{t('label.footprintName', "KiCad Footprint Name")}</label>
-                      <ClearableInput 
-                        placeholder='Package_DIP:DIP-8_W7.62mm' 
-                        value={part.footprintName || ''} 
-                        onChange={handleChange} 
-                        name='footprintName' 
+                      <ClearableInput
+                        placeholder='Package_DIP:DIP-8_W7.62mm'
+                        value={part.footprintName || ''}
+                        onChange={handleChange}
+                        name='footprintName'
                         help={<Trans i18nKey="page.inventory.popup.footprintName">
                           Associate a KiCad footprint name with this part. Both the footprint group and footprint name should be specified and separated using a colon.<br /><i>Example:</i> <b>Package_DIP:DIP-8_W7.62mm</b>
                         </Trans>}
@@ -2034,7 +2056,7 @@ export function Inventory({ partNumber = "", ...rest }) {
   const handleCancelDiscard = (e) => {
     setConfirmDiscardAction(null);
     setConfirmDiscardChanges(false);  // close confirm
-    if (blocker.reset) blocker.reset(); 
+    if (blocker.reset) blocker.reset();
   }
 
   const handleConfirmDiscard = async (e) => {
@@ -2073,7 +2095,7 @@ export function Inventory({ partNumber = "", ...rest }) {
 
   const handlePartParametricsDelete = (e, control, parametric) => {
     setPart({
-      ...part, 
+      ...part,
       parametrics: _.filter(part.parametrics, i => i.partParametricId !== parametric.partParametricId)
     });
     setIsDirty(true);
@@ -2165,7 +2187,7 @@ export function Inventory({ partNumber = "", ...rest }) {
         onInventoryPartSearch={doInventoryPartSearch}
         isBarcodeReceiving={isBarcodeReceiving}
       />
-      <PartParametricsModal 
+      <PartParametricsModal
         part={part}
         isOpen={partParametricsModalIsOpen}
         onClose={() => setPartParametricsModalIsOpen(false)}
@@ -2187,7 +2209,15 @@ export function Inventory({ partNumber = "", ...rest }) {
       {/* FORM START */}
 
       <Form onSubmit={e => onSubmit(e, part)} className="inventory">
-        <BarcodeScannerInput onReceived={handleBarcodeInput} minInputLength={4} swallowKeyEvent={false} enableSound={false} onReadStarted={() => setIsBarcodeReceiving(true)} onReadStopped={() => setIsBarcodeReceiving(false)} />
+        <BarcodeScannerInput
+          onReceived={handleBarcodeInput}
+          minInputLength={4}
+          swallowKeyEvent={false}
+          enableSound={false}
+          onReadStarted={() => setIsBarcodeReceiving(true)}
+          onReadStopped={() => setIsBarcodeReceiving(false)}
+          listening={isBarcodeScanningEnabled}
+        />
         {part && part.partId > 0 && (
           <Button
             type="button"
