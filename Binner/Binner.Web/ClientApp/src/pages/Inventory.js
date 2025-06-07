@@ -1101,14 +1101,20 @@ export function Inventory({ partNumber = "", ...rest }) {
     setPartMetadataIsSubscribed(false);
     setInputPartNumber("");
     setQuantityAdded(0);
+
+    // Get current preferences to ensure we have latest values
+    const currentPreferences = JSON.parse(localStorage.getItem("viewPreferences") || "{}");
+    const shouldRemember = currentPreferences.rememberLast && !clearAll;
+
     const clearedPart = {
       partId: 0,
       partNumber: "",
       allowPotentialDuplicate: false,
-      quantity: (clearAll || !viewPreferences.rememberLast) ? DefaultQuantity : viewPreferences.lastQuantity || DefaultQuantity,
-      lowStockThreshold: (clearAll || !viewPreferences.rememberLast) ? DefaultLowStockThreshold : viewPreferences.lowStockThreshold || DefaultLowStockThreshold,
-      partTypeId: (clearAll || !viewPreferences.rememberLast) ? DefaultPartType : viewPreferences.lastPartTypeId || DefaultPartType,
-      mountingTypeId: (clearAll || !viewPreferences.rememberLast) ? DefaultMountingTypeId : viewPreferences.lastMountingTypeId || DefaultMountingTypeId,
+      // Use remembered values if rememberLast is enabled and we're not clearing all
+      quantity: shouldRemember ? (currentPreferences.lastQuantity || DefaultQuantity) : DefaultQuantity,
+      lowStockThreshold: shouldRemember ? (currentPreferences.lastLowStockThreshold || DefaultLowStockThreshold) : DefaultLowStockThreshold,
+      partTypeId: shouldRemember ? (currentPreferences.lastPartTypeId || DefaultPartType) : DefaultPartType,
+      mountingTypeId: shouldRemember ? (currentPreferences.lastMountingTypeId || DefaultMountingTypeId) : DefaultMountingTypeId,
       packageType: "",
       keywords: "",
       description: "",
@@ -1117,9 +1123,10 @@ export function Inventory({ partNumber = "", ...rest }) {
       mouserPartNumber: "",
       arrowPartNumber: "",
       tmePartNumber: "",
-      location: (clearAll || !viewPreferences.rememberLast) ? "" : viewPreferences.lastLocation + "",
-      binNumber: (clearAll || !viewPreferences.rememberLast) ? "" : viewPreferences.lastBinNumber + "",
-      binNumber2: (clearAll || !viewPreferences.rememberLast) ? "" : viewPreferences.lastBinNumber2 + "",
+      // Location fields should be strings
+      location: shouldRemember ? (currentPreferences.lastLocation || "") : "",
+      binNumber: shouldRemember ? (currentPreferences.lastBinNumber || "") : "",
+      binNumber2: shouldRemember ? (currentPreferences.lastBinNumber2 || "") : "",
       cost: "",
       lowestCostSupplier: "",
       lowestCostSupplierUrl: "",
@@ -1139,8 +1146,18 @@ export function Inventory({ partNumber = "", ...rest }) {
     setLoadingPartMetadata(false);
     setLoadingPartTypes(false);
     setInfoResponse({});
-    if (clearAll && viewPreferences.rememberLast) {
-      updateViewPreferences({ lastQuantity: clearedPart.quantity, lowStockThreshold: clearedPart.lowStockThreshold, lastPartTypeId: clearedPart.partTypeId, lastMountingTypeId: clearedPart.mountingTypeId });
+
+    // Only update preferences if we're clearing all and rememberLast is enabled
+    if (clearAll && currentPreferences.rememberLast) {
+      updateViewPreferences({
+        lastQuantity: clearedPart.quantity,
+        lastLowStockThreshold: clearedPart.lowStockThreshold,
+        lastPartTypeId: clearedPart.partTypeId,
+        lastMountingTypeId: clearedPart.mountingTypeId,
+        lastLocation: clearedPart.location,
+        lastBinNumber: clearedPart.binNumber,
+        lastBinNumber2: clearedPart.binNumber2
+      });
     }
     document.getElementById('inputPartNumber').focus();
   };
@@ -1181,7 +1198,10 @@ export function Inventory({ partNumber = "", ...rest }) {
   };
 
   const updateViewPreferences = (preference) => {
-    const newViewPreferences = { ...viewPreferences, ...preference };
+    // Ensure we have the latest preferences from localStorage before updating
+    const currentPreferences = JSON.parse(localStorage.getItem("viewPreferences") || "{}");
+    const newViewPreferences = { ...currentPreferences, ...preference };
+    // Update state and localStorage atomically
     setViewPreferences(newViewPreferences);
     localStorage.setItem("viewPreferences", JSON.stringify(newViewPreferences));
   };
@@ -1234,28 +1254,28 @@ export function Inventory({ partNumber = "", ...rest }) {
         }
         break;
       case "partTypeId":
-        if (viewPreferences.rememberLast && !isEditing) updateViewPreferences({ lastPartTypeId: control.value });
+        if (viewPreferences.rememberLast) updateViewPreferences({ lastPartTypeId: control.value });
         break;
       case "mountingTypeId":
-        if (viewPreferences.rememberLast && !isEditing) updateViewPreferences({ lastMountingTypeId: control.value });
+        if (viewPreferences.rememberLast) updateViewPreferences({ lastMountingTypeId: control.value });
         break;
       case "quantity":
-        if (viewPreferences.rememberLast && !isEditing) updateViewPreferences({ quantity: parseInt(control.value) || DefaultQuantity });
+        if (viewPreferences.rememberLast) updateViewPreferences({ lastQuantity: parseInt(control.value) || DefaultQuantity });
         break;
       case "lowStockThreshold":
-        if (viewPreferences.rememberLast && !isEditing) updateViewPreferences({ lowStockThreshold: control.value });
+        if (viewPreferences.rememberLast) updateViewPreferences({ lastLowStockThreshold: parseInt(control.value) || DefaultLowStockThreshold });
         break;
       case "location":
         part[control.name] = control.value.replace("\t", "");
-        if (viewPreferences.rememberLast && !isEditing) updateViewPreferences({ lastLocation: part[control.name] });
+        if (viewPreferences.rememberLast) updateViewPreferences({ lastLocation: part[control.name] });
         break;
       case "binNumber":
         part[control.name] = control.value.replace("\t", "");
-        if (viewPreferences.rememberLast && !isEditing) updateViewPreferences({ lastBinNumber: part[control.name] });
+        if (viewPreferences.rememberLast) updateViewPreferences({ lastBinNumber: part[control.name] });
         break;
       case "binNumber2":
         part[control.name] = control.value.replace("\t", "");
-        if (viewPreferences.rememberLast && !isEditing) updateViewPreferences({ lastBinNumber2: part[control.name] });
+        if (viewPreferences.rememberLast) updateViewPreferences({ lastBinNumber2: part[control.name] });
         break;
       default:
         break;
